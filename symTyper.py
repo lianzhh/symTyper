@@ -25,12 +25,6 @@ def runInstance(myInstance):
 
 # Runs a command defined in params[0] passing it the parmas[1:]
 
-# def call_program(params):
-#    logging.debug('Running: %s ' % commands[params[0]] % (params[1:]))
-#    os.system(commands[params[0]] % (params[1:]))
-#    logging.debug('Completed: %s ' % commands[params[0]] % (params[1:]))
-
-
 
 
 def makeDirOrdie(dirPath):
@@ -62,17 +56,22 @@ def processClades(args, pool=Pool(processes=1)):
    hmmerOutputDir =  os.path.join(os.path.dirname(args.inFile.name), "hmmer_output")
    makeDirOrdie(hmmerOutputDir)   
    logging.debug('Starting hmmscans for %s files ' % len(fastaList))
-   pool.map(runInstance, [ProgramRunner("HMMER_COMMAND", [ hmmer_db, os.path.join(fastaFilesDir,x), os.path.join(hmmerOutputDir,x.split(".")[0])]) for x in fastaList])
+   #pool.map(runInstance, [ProgramRunner("HMMER_COMMAND", [ hmmer_db, os.path.join(fastaFilesDir,x), os.path.join(hmmerOutputDir,x.split(".")[0]) ] ) for x in fastaList])
    logging.debug('Done with hmmscans')
 
    #Parse HMMscan
    parsedHmmerOutputDir = os.path.join(os.path.dirname(args.inFile.name), "hmmer_parsedOutput")   
    makeDirOrdie(parsedHmmerOutputDir)
    logging.debug('Parsing Hmmer outputs for %s files ' % len(fastaList))
-   pool.map(runInstance, [CladeParser( "data/hmmer_output/"+x.split(".")[0]+".out", "data/hmmer_parsedOutput/"+x.split(".")[0], args.evalue) for x in fastaList])    
+   #pool.map(runInstance, [CladeParser( "data/hmmer_output/"+x.split(".")[0]+".out", "data/hmmer_parsedOutput/"+x.split(".")[0], args.evalue) for x in fastaList])    
    logging.debug('Done Parsing Hmmer outputs for %s files ' % len(fastaList))
 
-
+   # generate tables and pie-charts
+   logging.debug("Generating formatted output")
+   makeCladeDistribTable( args.samplesFile.name, os.path.join(os.path.dirname(args.inFile.name),"hmmer_parsedOutput"))   
+   generateCladeBreakdown(args.samplesFile.name, os.path.join(os.path.dirname(args.inFile.name),"hmmer_parsedOutput"), "HIT", 4)
+   logging.debug("Done Generating formatted output")
+   
 
    logging.debug('Done with Clade run')
 
@@ -102,24 +101,20 @@ def main(argv):
 
    parser_clade.set_defaults(func=processClades)
 
-   ## STATS
+   ## INPUT FILE STATS
    parser_stats = subparsers.add_parser('stats')
    parser_stats.add_argument('-i', '--inFile', type=argparse.FileType('r'), required=True, help=" Input fasta file ")
    parser_stats.set_defaults(func=computeStats)
-   
 
 
-
-
-
-   
-   
    args = parser.parse_args()
 
    print "Running with %s threads" % args.threads
    pool = Pool(processes=args.threads)
 
-   print args
+   logging.debug("Initial ARGS are:")   
+   logging.debug(args)
+
 
    args.func(args, pool)   
 
