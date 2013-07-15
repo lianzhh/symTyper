@@ -7,8 +7,12 @@ from multiprocessing import Pool
 import logging
 import sys
 from classes.CladeParser import *
+from classes.HmmerFastaExtractor import *
 from classes.ProgramRunner import *
+
+
 import Bio.SearchIO
+from Bio import SeqIO
 
 version="0.01"
 
@@ -35,7 +39,7 @@ def makeDirOrdie(dirPath):
       #TODO; Uncomment after testing done
       #logging.error("Split fasta directory %s already exists " % hmmerOutputDir)
       #sys.exit()
-      
+   return dirPath 
 
 
 
@@ -76,6 +80,26 @@ def processClades(args, pool=Pool(processes=1)):
    logging.debug('Done with Clade run')
 
 
+
+def extractSeqsFromHits(args, pool):
+   logging.debug("Extracting Hits from hmmer_parsedOutput")
+   # SEQIO.INDEX DOES NOT WORK WITH MAP.POOL BECAUSE IT CANNOT BE PICKLED
+   # USING A CUTOM DICT TO DO THE JOB
+   # TO DO, IF PROBLEMS with MEMORY, DO NOT RUN THIS IN PARALLEL. JUST DO IT IN SERIAL MODE
+
+   inFileIndex = Bio.SeqIO.to_dict(  SeqIO.parse(args.inFile.name, 'fasta'))
+   samples = [sample.rstrip() for sample in open(args.samplesFile.name, 'r')]
+   pool.map(runInstance, [HmmerFastaExtractor( inFileIndex, os.path.join(args.hmmerOutputs, sample, "HIT"), os.path.join(args.outputDir, sample+".fasta")) for sample in samples])
+   logging.debug(" Done extracting Hits from hmmer_parsedOutput")
+      
+
+def processSubtype(args, pool):
+   print "processing subtype"
+
+   
+
+
+
 def main(argv):
    
 
@@ -88,18 +112,34 @@ def main(argv):
    
 
    #TODO: Chnage the default to 1 after testing
-   parser.add_argument('-t', '--threads', type=int, default =5)
+   parser.add_argument('-t', '--threads', type=int, default = 1)
    subparsers = parser.add_subparsers(dest='action', help='Available commands')
 
    ## CLADE
    parser_clade = subparsers.add_parser('clade')
    parser_clade.add_argument('-i', '--inFile', type=argparse.FileType('r'), required=True, help=" Input fasta file ")
-   parser_clade.add_argument('-s', '--samplesFile', type=argparse.FileType('r'), required=True, help=" Input fasta file ")
+   parser_clade.add_argument('-s', '--samplesFile', type=argparse.FileType('r'), required=True, help=" Samples file  ")
    parser_clade.add_argument('-e', '--evalue', type=float, default=1e-20)
    parser_clade.add_argument('-d', '--evalDifference', type=float, default=1e5, help="Eval difference between first and second hits")
-   
-
    parser_clade.set_defaults(func=processClades)
+
+   ## SUBTYPE
+   parser_subtype = subparsers.add_parser('subtype')
+   parser_subtype.add_argument('-i', '--inFile', type=argparse.FileType('r'), required=True, help=" Input sequences that passed the Clade")
+   parser_subtype.add_argument('-s', '--samplesFile', type=argparse.FileType('r'), required=True, help=" Samples file ")
+   parser_subtype.set_defaults(func=processSubtype)
+
+
+   ## EXTRACTFASTA
+   parser_extractFasta = subparsers.add_parser('extractFasta')
+   parser_extractFasta.add_argument('-i', '--inFile', type=argparse.FileType('r'), required=True, help=" Samples file ")
+   parser_extractFasta.add_argument('-s', '--samplesFile', type=argparse.FileType('r'), required=True, help=" Samples file ")
+   parser_extractFasta.add_argument('-d', '--hmmerOutputs', required=True, help=" hmmer ouput directory")
+   parser_extractFasta.add_argument('-o', '--outputDir', type=makeDirOrdie, required=True, help=" Fasta ouput directory")
+   parser_extractFasta.set_defaults(func=extractSeqsFromHits)
+      
+
+
 
    ## INPUT FILE STATS
    parser_stats = subparsers.add_parser('stats')
@@ -107,11 +147,17 @@ def main(argv):
    parser_stats.set_defaults(func=computeStats)
 
 
+
+
+
    args = parser.parse_args()
 
    print "Running with %s threads" % args.threads
    pool = Pool(processes=args.threads)
 
+
+
+   # my arguments are
    logging.debug("Initial ARGS are:")   
    logging.debug(args)
 
