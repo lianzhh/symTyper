@@ -9,6 +9,7 @@ class CladeParser():
         self.minEval= minEval
 
     def run(self):
+        print "+++++"+self.outputDirPath+"++++++"
         lowFile  = open(os.path.join(self.outputDirPath, "LOW"), 'w')
         ambiguousFile = open(os.path.join(self.outputDirPath, "AMBIGUOUS"), 'w')
         hitsFile = open(os.path.join(self.outputDirPath, "HIT"), 'w')
@@ -26,7 +27,7 @@ class CladeParser():
                                                 % (seq.id, seq.hits[0].id, seq.hits[1].id, seq.hits[0].evalue, seq.hits[1].evalue));
                             continue
                     # previous contienue shortcircuits the following
-                    print len(seq.hits)
+
                     hitsFile.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
                                    % (seq.id, seq.hits[0].hsps[0].query_start, seq.hits[0].hsps[0].query_end,  
                                       seq.hits[0].id, seq.hits[1].id, seq.hits[0].evalue, seq.hits[1].evalue))

@@ -65,9 +65,16 @@ def processClades(args, pool=Pool(processes=1)):
 
    #Parse HMMscan
    parsedHmmerOutputDir = os.path.join(os.path.dirname(args.inFile.name), "hmmer_parsedOutput")   
+
+   print "---------"+parsedHmmerOutputDir+"--------"
    makeDirOrdie(parsedHmmerOutputDir)
+
    logging.debug('Parsing Hmmer outputs for %s files ' % len(fastaList))
-   #pool.map(runInstance, [CladeParser( "data/hmmer_output/"+x.split(".")[0]+".out", "data/hmmer_parsedOutput/"+x.split(".")[0], args.evalue) for x in fastaList])    
+   pool.map(makeDirOrdie, [ os.path.join(parsedHmmerOutputDir, x.split(".")[0]) for x in fastaList])    
+   
+   
+   #TODO use os.path.join instead of "+"
+   pool.map(runInstance, [CladeParser( "data/hmmer_output/"+x.split(".")[0]+".out", "data/hmmer_parsedOutput/"+x.split(".")[0], args.evalue) for x in fastaList])    
    logging.debug('Done Parsing Hmmer outputs for %s files ' % len(fastaList))
 
    # generate tables and pie-charts
