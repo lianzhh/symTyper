@@ -60,7 +60,7 @@ def processClades(args, pool=Pool(processes=1)):
    hmmerOutputDir =  os.path.join(os.path.dirname(args.inFile.name), "hmmer_output")
    makeDirOrdie(hmmerOutputDir)   
    logging.debug('Starting hmmscans for %s files ' % len(fastaList))
-   #pool.map(runInstance, [ProgramRunner("HMMER_COMMAND", [ hmmer_db, os.path.join(fastaFilesDir,x), os.path.join(hmmerOutputDir,x.split(".")[0]) ] ) for x in fastaList])
+   pool.map(runInstance, [ProgramRunner("HMMER_COMMAND", [ hmmer_db, os.path.join(fastaFilesDir,x), os.path.join(hmmerOutputDir,x.split(".")[0]) ] ) for x in fastaList])
    logging.debug('Done with hmmscans')
 
    #Parse HMMscan
@@ -70,11 +70,13 @@ def processClades(args, pool=Pool(processes=1)):
    makeDirOrdie(parsedHmmerOutputDir)
 
    logging.debug('Parsing Hmmer outputs for %s files ' % len(fastaList))
+
+   # making dirs in hmmer_parsedOutput with the sample names
    pool.map(makeDirOrdie, [ os.path.join(parsedHmmerOutputDir, x.split(".")[0]) for x in fastaList])    
-   
-   
+
    #TODO use os.path.join instead of "+"
-   pool.map(runInstance, [CladeParser( "data/hmmer_output/"+x.split(".")[0]+".out", "data/hmmer_parsedOutput/"+x.split(".")[0], args.evalue) for x in fastaList])    
+   samples = [sample.rstrip() for sample  in open(args.samplesFile.name, 'r')]
+   pool.map(runInstance, [CladeParser( os.path.join(hmmerOutputDir, sample+".out"), os.path.join(parsedHmmerOutputDir, sample), args.evalue) for sample in samples])    
    logging.debug('Done Parsing Hmmer outputs for %s files ' % len(fastaList))
 
    # generate tables and pie-charts
@@ -89,14 +91,14 @@ def processClades(args, pool=Pool(processes=1)):
 
 
 def extractSeqsFromHits(args, pool):
+   """
+   extracts the sequences of each hmmer HIT file, in parallel, using the sample specific fasta file (/data/fasta/sample.fasta)
+   define args 
+   
+   """
    logging.debug("Extracting Hits from hmmer_parsedOutput")
-   # SEQIO.INDEX DOES NOT WORK WITH MAP.POOL BECAUSE IT CANNOT BE PICKLED
-   # USING A CUTOM DICT TO DO THE JOB
-   # TO DO, IF PROBLEMS with MEMORY, DO NOT RUN THIS IN PARALLEL. JUST DO IT IN SERIAL MODE
-
-   inFileIndex = Bio.SeqIO.to_dict(  SeqIO.parse(args.inFile.name, 'fasta'))
    samples = [sample.rstrip() for sample in open(args.samplesFile.name, 'r')]
-   pool.map(runInstance, [HmmerFastaExtractor( inFileIndex, os.path.join(args.hmmerOutputs, sample, "HIT"), os.path.join(args.outputDir, sample+".fasta")) for sample in samples])
+   pool.map(runInstance, [HmmerFastaExtractor( os.path.join(args.splitFasta, sample+".fasta"), os.path.join(args.hmmerOutputs, sample, "HIT"), os.path.join(args.outputDir, sample+".fasta")) for sample in samples])
    logging.debug(" Done extracting Hits from hmmer_parsedOutput")
       
 
@@ -139,9 +141,10 @@ def main(argv):
 
    ## EXTRACTFASTA
    parser_extractFasta = subparsers.add_parser('extractFasta')
-   parser_extractFasta.add_argument('-i', '--inFile', type=argparse.FileType('r'), required=True, help=" Samples file ")
+   parser_extractFasta.add_argument('-f', '--splitFasta', required=True, help=" split fasta file dir")
    parser_extractFasta.add_argument('-s', '--samplesFile', type=argparse.FileType('r'), required=True, help=" Samples file ")
    parser_extractFasta.add_argument('-d', '--hmmerOutputs', required=True, help=" hmmer ouput directory")
+
    parser_extractFasta.add_argument('-o', '--outputDir', type=makeDirOrdie, required=True, help=" Fasta ouput directory")
    parser_extractFasta.set_defaults(func=extractSeqsFromHits)
       
