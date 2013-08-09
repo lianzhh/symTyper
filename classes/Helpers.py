@@ -3,14 +3,11 @@ from collections import Counter
 import os
 import sys
 
-
 # TODO THESE FUNCTION DO NOT NEED TO BE IN CLASS OR STATIC
-
 class Helpers:
       @staticmethod
       def fastaStats(inFile):
             print "Computing stats for %s " % inFile.name
-
       @staticmethod
       def splitFileBySample(inFile, samplesDescFile, splitFastaDir):
             ## Strcuture of the sequence names is sample::id
@@ -42,17 +39,13 @@ def getNumberLines(inFile):
       with open(inFile) as f:
             return len([1 for i in f])
 
-
-
+##### STATS FOR RUN #########################
 def makeCladeDistribTable(samplesDescFile, parsedHmmerOutputDir):
       print "generating stats for samples.ids %s and outputs in %s " % (samplesDescFile, parsedHmmerOutputDir)
-
       cladeDistFileName = "ALL_counts.tsv"
       cladeDistFile = open(os.path.join(parsedHmmerOutputDir, cladeDistFileName), "w");
-
       outputs = ["HIT", "NOHIT", "LOW", "AMBIGUOUS"]
       cladeDistFile.write("Sample\t"+"\t".join(outputs)+"\n")
-      
       with open(samplesDescFile) as sampleFile:
             for sample in sampleFile: 
                   sample = sample.rstrip()
@@ -60,6 +53,11 @@ def makeCladeDistribTable(samplesDescFile, parsedHmmerOutputDir):
       cladeDistFile.close()
 
 
+# GENERATES THE DETAILED_COUNT.TSV FILE
+### DETAILED_COUNT.TSV FILE FORMAT
+## Sample     subtype1   subtype2   subtype3 ...
+## sample1       10          100         0
+## sample2       100          0          72
 def generateCladeBreakdown(samplesDescFile, parsedHmmerOutputDir, fileName, field):
       cladeBreakdownFileName = "DETAILED_counts.tsv"
       cladeBreakdownFile = open(os.path.join(parsedHmmerOutputDir, cladeBreakdownFileName), "w");
@@ -83,11 +81,46 @@ def generateCladeBreakdown(samplesDescFile, parsedHmmerOutputDir, fileName, fiel
 
       cladeBreakdownFile.close()
 
+### UNIQ_SUBTYPES_COUNT.TSV FILE FORMAT
+### Output type is either uniq, perfect 
+## Sample     subtype1   subtype2   subtype3 ...
+## sample1       10          100         0
+## sample2       100          0          72
 
+def generateSubtypeCounts(samplesDescFile, blastResultsDir, outputType):
+      outFile = open(os.path.join(blastResultsDir, outputType + "_subtypes_count.tsv"), 'w')
+      allSubtypesCounts = {}
+      samples=[]
+      # collection of all subtypes seens in all samples
+      subtypes= set()      
+      with open(samplesDescFile) as sampleFile:
+            for sample in sampleFile:
+                  sample = sample.rstrip()
+                  samples.append(sample)
+                  subtypesCounts = {}
+                  with open(os.path.join(blastResultsDir, outputType, sample+".out")) as subtypeFile:
+                        for line in subtypeFile:
+                              line = line.rstrip()
+                              if subtypesCounts.has_key(line.split()[1]):
+                                    subtypesCounts[line.split()[1]] += 1
+                              else:
+                                    subtypes.add(line.split()[1])
+                                    subtypesCounts[line.split()[1]]=1
+                  allSubtypesCounts[sample] = subtypesCounts.copy()
+
+      print >> outFile, "sample\t"+"\t".join(subtypes)
+      for sample in samples:
+            line = sample+"\t"
+
+            for subtype in subtypes:
+                  if  allSubtypesCounts[sample].has_key(subtype):
+                        line += str(allSubtypesCounts[sample][subtype])+"\t"
+                  else:
+                        line += "0"+"\t"
+            print >> outFile, line
+            
+      outFile.close()
       
-
-
-
 
 
 

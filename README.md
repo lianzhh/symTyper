@@ -1,4 +1,4 @@
 symTyper
 ========
 
-symTyper project
+symTyper In progress
