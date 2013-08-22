@@ -27,7 +27,6 @@ class CladeParser():
                                                 % (seq.id, seq.hits[0].id, seq.hits[1].id, seq.hits[0].evalue, seq.hits[1].evalue));
                             continue
                     # previous contienue shortcircuits the following
-
                     hitsFile.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
                                    % (seq.id, seq.hits[0].hsps[0].query_start, seq.hits[0].hsps[0].query_end,  
                                       seq.hits[0].id, seq.hits[1].id, seq.hits[0].evalue, seq.hits[1].evalue))

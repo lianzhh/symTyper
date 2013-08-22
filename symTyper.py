@@ -12,7 +12,7 @@ from classes.HmmerFastaExtractor import *
 from classes.FastaExtractor import *
 from classes.BlastParser import *
 from classes.ProgramRunner import *
-
+from classes.CD_HitParser import *
 
 import Bio.SearchIO
 from Bio import SeqIO
@@ -65,7 +65,7 @@ def processClades(args, pool=Pool(processes=1)):
    hmmerOutputDir =  os.path.join(os.path.dirname(args.inFile.name), "hmmer_output")
    makeDirOrdie(hmmerOutputDir)   
    logging.debug('CLADE: Starting hmmscans for %s files ' % len(fastaList))
-   pool.map(dryRunInstance, [ProgramRunner("HMMER_COMMAND", [ hmmer_db, os.path.join(fastaFilesDir,x), os.path.join(hmmerOutputDir,x.split(".")[0]) ] ) for x in fastaList])
+   pool.map(runInstance, [ProgramRunner("HMMER_COMMAND", [ hmmer_db, os.path.join(fastaFilesDir,x), os.path.join(hmmerOutputDir,x.split(".")[0]) ] ) for x in fastaList])
    logging.debug('CLADE: Done with hmmscans')
 
    #Parse HMMscan
@@ -81,7 +81,7 @@ def processClades(args, pool=Pool(processes=1)):
 
    #TODO use os.path.join instead of "+"
    samples = [sample.rstrip() for sample  in open(args.samplesFile.name, 'r')]
-   pool.map(dryRunInstance, [CladeParser( os.path.join(hmmerOutputDir, sample+".out"), os.path.join(parsedHmmerOutputDir, sample), args.evalue) for sample in samples])    
+   pool.map(runInstance, [CladeParser( os.path.join(hmmerOutputDir, sample+".out"), os.path.join(parsedHmmerOutputDir, sample), args.evalue) for sample in samples])    
    logging.debug('CLADE:Done Parsing Hmmer outputs for %s files ' % len(fastaList))
 
    # generate tables and pie-charts
@@ -124,7 +124,7 @@ def processSubtype(args, pool):
    logging.debug("SYBTYPE: Running blast for subtyping")
    samples = [sample.rstrip() for sample in open(args.samplesFile.name, 'r')]
    makeDirOrdie(args.blastOutDir)
-   pool.map(dryRunInstance, [ProgramRunner("BLAST_COMMAND", [os.path.join(args.hitsDir, sample+".fasta"), blast_db, os.path.join(args.blastOutDir, sample+".out") ] ) for sample in samples])
+   pool.map(runInstance, [ProgramRunner("BLAST_COMMAND", [os.path.join(args.hitsDir, sample+".fasta"), blast_db, os.path.join(args.blastOutDir, sample+".out") ] ) for sample in samples])
    logging.debug("SUBTYPE: Done running blast for subtyping")
 
    logging.debug("SUBTYPE: Parsing blast output files")
@@ -136,7 +136,7 @@ def processSubtype(args, pool):
    makeDirOrdie(os.path.join(args.blastResults,"NEW"))
    makeDirOrdie(os.path.join(args.blastResults,"SHORTNEW"))
 
-   pool.map(dryRunInstance,  [BlastParser( os.path.join(args.blastOutDir, sample+".out"), args.blastResults) for sample in samples])
+   pool.map(runInstance,  [BlastParser( os.path.join(args.blastOutDir, sample+".out"), args.blastResults) for sample in samples])
    logging.debug("SUBTYPE: Parsing blast output files")
 
    logging.debug("SUBTYPE:Generating formatted output")
@@ -162,16 +162,15 @@ def processSubtype(args, pool):
 def resolveMultipleHits(args, pool):
    repsDir = "Reps"
    repsFasta = "allReps.fasta"
-   repsClusters= "Clusters"
-
+   repsClustersDir= "Clusters"
+   correctedResultsDir = "correctedMultiplesHits"
    logging.debug("resolveMultipleHits: Started process for resolving multiple hits")
    samples = [sample.rstrip() for sample in open(args.samplesFile.name, 'r')]
    makeDirOrdie(os.path.join(args.clustersDir, "clusters",))
    pool.map(runInstance, [ProgramRunner("CLUSTER_COMMAND", [os.path.join(args.multipleFastaDir, sample+".fasta"), os.path.join(args.clustersDir, "clusters", sample)])  for sample in samples])
    logging.debug("resolveMultipleHits: Done clustering of multiple reads")
 
-   # Directory where all cluster representatives will be set up 
-   
+   # Directory where all cluster representatives will be set up    
    makeDirOrdie(os.path.join(args.clustersDir, repsDir))
    allRepsFasta = open(os.path.join(args.clustersDir, repsDir, repsFasta), 'w')
    # WARNING this shoud work fine as long as each clstr file not very large. 
@@ -181,9 +180,33 @@ def resolveMultipleHits(args, pool):
    allRepsFasta.close()
    logging.debug("resolveMultipleHits: clustering concatenated all reps")
 
-   makeDirOrdie(os.path.join(args.clustersDir, repsDir, repsClusters))
-   runInstance(ProgramRunner("CLUSTER_COMMAND", [os.path.join(args.clustersDir, repsDir, repsFasta), os.path.join(args.clustersDir, repsDir, repsClusters, repsFasta)]))
+   makeDirOrdie(os.path.join(args.clustersDir, repsDir, repsClustersDir))
+   runInstance(ProgramRunner("CLUSTER_COMMAND", [os.path.join(args.clustersDir, repsDir, repsFasta), os.path.join(args.clustersDir, repsDir, repsClustersDir, repsFasta)]))
    logging.debug("resolveMultipleHits: done clustering concatenated reps")
+   cdHitParser =  CD_HitParser("data/samples.ids", "data/resolveMultiples/Reps/Clusters/allReps.fasta.clstr", "data/resolveMultiples/clusters/", "data/blastResults/MULTIPLE/",)
+   makeDirOrdie(os.path.join(args.clustersDir, correctedResultsDir))
+   cdHitParser.run(os.path.join(args.clustersDir, correctedResultsDir)) 
+
+   logging.debug("resolveMultipleHits: Finished resolving multiple hits")
+
+
+def buildPlacementTree(correctedResultsDir):
+   logging.debug("placermentTree: Building Newick placement Tree for multiple hits") 
+   correctedClades = os.listdir(".")
+   logging.debug("placermentTree: Clades to be processed are: %s" % " ".join(correctedClades)) 
+   
+   
+   
+   
+
+
+   
+
+
+
+
+
+   
 
 
 
@@ -217,7 +240,7 @@ def main(argv):
    parser_subtype.add_argument('-s', '--samplesFile', type=argparse.FileType('r'), required=True, help=" Samples file ")
    parser_subtype.add_argument('-H', '--hitsDir', required=True, help=" hmmer fasta hits ouput directory")
    parser_subtype.add_argument('-b', '--blastOutDir', type=makeDirOrdie, required=True, help=" blast ouput directory")
-   parser_subtype.add_argument('-r', '--blastResults', type=makeDirOrdie, required=True, help=" blast ouput directory")
+   parser_subtype.add_argument('-r', '--blastResults', type=makeDirOrdie, required=True, help=" parsed blast results directory")
    parser_subtype.add_argument('-f', '--fastaFilesDir', type=makeDirOrdie, required=True, help="Split fasta files directory ")
    parser_subtype.set_defaults(func=processSubtype)
 
@@ -250,8 +273,8 @@ def main(argv):
 
 if __name__ == "__main__":
    main(sys.argv)
-   ###  python symTyper.py -t 3 clade  -i data2/sampleInput.fasta -s data2/samples.ids
+   ###  python symTyper.py -t 3 clade  -i data/sampleInput.fasta -s data/samples.ids
    ### python symTyper.py  -t 3 subtype -H data/hmmer_hits/ -s data/samples.ids -b data/blast_output/ -r data/blastResults/ -f data/fasta
-   ### 
+   ### python symTyper.py  -t 3 resolveMultipleHits -s data/samples.ids -m data/blastResults/MULTIPLE/fasta/ -c data/resolveMultiples/
 
 

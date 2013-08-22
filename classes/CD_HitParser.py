@@ -1,16 +1,33 @@
+### THIS CODE IS MOSTLY COMPLETELY SEQUENTIAL.
+### TODO, rewrite using a pool of processes
+
+#### VARIABLES CONVENTIONS
+#### data structures are either specific for samples: first level of clustering or for
+#### reps: second level of  clustering 
+#### Variables describe the data structure
+#### EX.:
+## reps_clusterSequences 
+##    reps specific data structure
+##    cluster is a key and sequences is value (list)
+## sample_sequenceCluster
+##    sample specific data structure
+##    sequence is a key and cluster is values
 
 import os
 import sys
 from collections import Counter
+from Helpers import makeDirOrdie
+
 
 class CD_HitParser():
     MIN_NUM_SEQS = 3;
     #samplesNames = samples
     def __init__(self, samplesFile, repsClustersFile, samplesClustDir, multiplesDir):
+
         """
-                #clusterSequences   {CL_ID:[seq1Id, seq2Id, ...], CL_ID:[seq1Id, ...], ... }
-                #clusters       {CL_ID:{subtype_1:count, ...}}
-                #sequences     {seq1Id:CL_ID, seq1Id:CL_ID, ... }
+                #reps_clusterSequences           {CL_ID:[seq1Id, seq2Id, ...], CL_ID:[seq1Id, ...], ... }
+                #reps_clusterSubtypeCounts       {CL_ID:{subtype_1:count, ...}}
+                #reps_sequenceCluster            {seq1Id:CL_ID, seq1Id:CL_ID, ... }
         """
         self.samplesClustDir = samplesClustDir
         self.repsClustersFile = repsClustersFile
@@ -35,6 +52,17 @@ class CD_HitParser():
 
         for sample in self.samples:
             self.__initSamplesDicts__(sample)
+
+    def __getEffectiveSubtypes__(self, subtypeCounts, minCount):
+        filtered = []
+
+        for (k,v) in subtypeCounts.items():
+            if subtypeCounts[k] < minCount:
+                filtered.append(k)
+                subtypeCounts.pop(k)
+            
+        return subtypeCounts, filtered
+
 
     def __initSamplesDicts__(self, sample):
         """
@@ -102,35 +130,27 @@ class CD_HitParser():
                     sSubtypes[data[0]] = data[1:]
         return sSubtypes
 
-    def __computeEffectiveRange__(self, counts):
+    #TODO: Document this thouroughly
+    def __computeEffectiveRange__(self, counts, sensitivity=0):
+        """
+        """
         sortedList = sorted(counts, reverse=True)
-        
+        start, end = 1, sortedList[0]
+        for val in sortedList[1:]:
+            if val > start:
+                start = start + 1.0/5 * ((1.0 * val)/end) * (end - start + 1)
+        newSart = 1
+        for val in sorted(sortedList):
+            newStart = val
+            if val >= start:
+                break
+        return (newStart, end)
 
+    def run(self, correctedResultsDir):
+        detailedOutputFile  = open(os.path.join( correctedResultsDir, "detailedOutputFile_all_clades" ),  'w')
+        correctedOutputFile = open(os.path.join( correctedResultsDir, "correctedOutputFile_all_clades"), 'w')
+        resolvedOutputFile  = open(os.path.join( correctedResultsDir, "resolvedOutputFile_all_clades" ),  'w')
 
-         my @sortedList = sort {$b <=> $a} @_;
-    my ($start, $end) = (1, $sortedList[0]);
-    print "Sorted list is: @sortedList\n";
-
-    foreach my $val (@sortedList[1..$#sortedList]){
-        if ($val > $start){
-            $start = $start + 1.0/2 * ((1.0 * $val)/$end) * ($end - $start + 1);
-
-
-            # USE ONLY FOR DEBUG                                                                                                                                       
-            print "new val is $val  and new start is $start\n";
-            #<STDIN>;                                                                                                                                                  
-        }
-    }
-    my $newStart = 1;
-    foreach my $val (reverse(@sortedList)){
-        $newStart = $val;
-        last if $val >= $start;
-    }
-    return ($newStart, $end);
-}
-
-
-    def run(self):
         # only sequences that occue in a cluster with at least MIN_NUM_SEQS from other clusters pass
         passedSeqs = self.__filterSeqs__()
         seqSubtypes= self.__initSeqSubtypes__()
@@ -142,6 +162,12 @@ class CD_HitParser():
         processedSeqs = {}
         subtypeCounts = {}
 
+        # Keep the correct output breakdown by file
+        # {'A': file_handle, 'B': file_handle,... }
+
+        splitCorrectedCladeOutputFiles={}
+        splitResolvedCladeOutputFiles={}
+
         # We get one filtered seqeunce at a time. For each filterd sequence, the reps in its cluster
         # for each of the rep, we then process the sequences that were in its cluster at the sample level.
         for passedSeq in passedSeqs:
@@ -149,15 +175,12 @@ class CD_HitParser():
             subtypes = []
 
             if processedSeqs.has_key(passedSeq):
-                print "%s was already found using %s " % (passedSeq, processedSeqs[passedSeq])
                 continue
-
             clustId =  self.reps_sequenceCluster[passedSeq]
 
 
-            print "###############################################################################";
-            print "processing reps cluster id:%s " % clustId
-            print passedSeq
+            print >> detailedOutputFile, "#### Cluster: %s" % clustId;
+            ####print  passedSeq
             # we resolve all the rep sequences that belong to that cluster from which we selected the passedSeq
             for seq in self.reps_clusterSequences[clustId]:
                 # Remove seq from later processing since it was found. 
@@ -166,30 +189,85 @@ class CD_HitParser():
                 sample = seq.split("::")[0]
                 clust = self.sample_sequenceCluster[sample][seq]
                 # Which sequences are with seq in the sample  cluster file?
-                print "\t"+seq
+                ####print  "\t"+seq
                 for sampleSeq in self.sample_clustersSeqs[sample][clust]:
-                    print "\t\t"+sampleSeq
+                    ####print  "\t\t"+sampleSeq
                     nbSeqs+=1
                     # we collect all the subtypes that for all the sequences in the same cluster  
                     # for later computing the effective range
                     subtypes.extend(seqSubtypes[sampleSeq])
-                print "\n"
-            print "\n"
+                ####print "\n"
+            ####print  "\n"
 
 
             subtypeCounts = dict(Counter(subtypes))
             # array of counts used to determine the effective lower and upper ranges
             counts=subtypeCounts.values()
-        
-
-            print "Cluster: %s\tnumSeq:%s\tsubtypes:%s\t" % (clustId, nbSeqs, " ".join(subtypes))
+            print >> detailedOutputFile, "Cluster: %s\tnumReps: %s\tnumSeq: %s\tsubtypes:" % (clustId, len(self.reps_clusterSequences[clustId]), nbSeqs),
             for (k, v) in  subtypeCounts.items():
-                print "%s\t%s" % (k, v),
-            print"\n";
+                print >> detailedOutputFile, "%s:\t%s," % (k, v),
+            print >> detailedOutputFile
+            print >> detailedOutputFile,  self.reps_clusterSubtypeCounts[clust]
 
             #computer the effective range
+            effectiveRange = self.__computeEffectiveRange__(counts)
+            print >> detailedOutputFile, "The effective range is: %s" % " ".join(map(str, effectiveRange))
+            # Get the clade information, check the first letter of the first subtypes in counts list
+            clade = subtypeCounts.keys()[0][0]
+            print >> detailedOutputFile, "Corrected\tnumSeq: %s\tclade: %s\tsubtypes:" % (nbSeqs, clade),
+            
+        
+            makeDirOrdie(os.path.join(correctedResultsDir, "corrected"))
+            makeDirOrdie(os.path.join(correctedResultsDir, "resolved"))
+
+
+
+
+            effectiveSubtypes, filtered = self.__getEffectiveSubtypes__(subtypeCounts, effectiveRange[0]) 
+            if len(effectiveSubtypes.keys()) == 1:
+                print >> resolvedOutputFile, "Cluster: %s\tnumSeq: %s\tclade: %s\tbreakDown:%s\tsubtypes:%s" % (
+                    clustId, nbSeqs, clade, " ".join(["%s:%s" % (key,val) for (key,val) in self.reps_clusterSubtypeCounts[clust].items() ]), " ".join(["%s:%s" %(x,y) for (x,y) in effectiveSubtypes.items()])
+                    ),  
+                if clade not in splitResolvedCladeOutputFiles.keys():
+                    # print the line in the appropriate clade file
+                    splitResolvedCladeOutputFiles[clade] = open(os.path.join(correctedResultsDir, "resolved", clade), 'w')
+                print >> splitResolvedCladeOutputFiles, "Cluster: %s\tnumSeq: %s\tclade: %s\tbreakDown:%s\tsubtypes:%s" % (
+                    clustId, nbSeqs, clade, " ".join(["%s:%s" % (key,val) for (key,val) in self.reps_clusterSubtypeCounts[clust].items() ]), " ".join(["%s:%s" %(x,y) for (x,y) in effectiveSubtypes.items()])
+                    ),  
+            else:
+
+                if clade not in splitCorrectedCladeOutputFiles.keys():
+                    # print the line in the appropriate clade file
+                    splitCorrectedCladeOutputFiles[clade] = open(os.path.join(correctedResultsDir, "corrected", clade), 'w')
+                    print "*****************print I am here*******************"
+                    print clade
+                 
+                    print  splitCorrectedCladeOutputFiles
+                    print "************************************"
+                print >> splitCorrectedCladeOutputFiles[clade], "Cluster: %s\tnumSeq: %s\tclade: %s\tbreakDown:%s\tsubtypes:" % (
+                    clustId, nbSeqs, clade, " ".join(["%s:%s" % (key,val) for (key,val) in self.reps_clusterSubtypeCounts[clust].items() ])
+                    ),
+                print >> correctedOutputFile, "Cluster: %s\tnumSeq: %s\tclade: %s\tbreakDown:%s\tsubtypes:" % (
+                    clustId, nbSeqs, clade, " ".join(["%s:%s" % (key,val) for (key,val) in self.reps_clusterSubtypeCounts[clust].items() ])
+                    ),
+
+                for (k,v) in effectiveSubtypes.items():
+                    # printing to bow files the detailed output and the just the correct information
+                    print >> detailedOutputFile, "%s: %s," % (k, v),
+                    print >> correctedOutputFile, "%s: %s," % (k, v),
+                    print >> splitCorrectedCladeOutputFiles[clade], "%s: %s," % (k, v),
+
+                print >> detailedOutputFile, "filtered are: %s" % " ".join(filtered)
+                print >> correctedOutputFile, ""
+                print >> splitCorrectedCladeOutputFiles[clade], ""
+        detailedOutputFile.close()
+        correctedOutputFile.close()
+        resolvedOutputFile.close()
+        
+        # close all the split files that have been open
+        [splitCorrectedCladeOutputFiles[cl].close() for cl in splitCorrectedCladeOutputFiles.keys()]
+        [splitResolvedCladeOutputFiles[cl].close() for cl in splitResolvedCladeOutputFiles.keys()]
 
 
     def dryRun(self):
         pass
-

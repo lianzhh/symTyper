@@ -35,6 +35,17 @@ class Helpers:
             return samples
 
 
+
+def makeDirOrdie(dirPath):
+   if not os.path.isdir(dirPath):
+      os.makedirs(dirPath)
+   else:
+      pass
+      #TODO; Uncomment after testing done
+      #logging.error("Split fasta directory %s already exists " % hmmerOutputDir) 
+      #sys.exit()
+   return dirPath
+
 def getNumberLines(inFile):
       with open(inFile) as f:
             return len([1 for i in f])
