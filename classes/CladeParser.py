@@ -32,7 +32,7 @@ class CladeParser():
                                       seq.hits[0].id, seq.hits[1].id, seq.hits[0].evalue, seq.hits[1].evalue))
                     continue
             else:
-                noHitsFile.write("$seqId\n" % (seq.id) );
+                noHitsFile.write("seqId:%s\n" % (seq.id) );
                 continue
         lowFile.close(); ambiguousFile.close(); hitsFile.close(); noHitsFile.close()        
     

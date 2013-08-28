@@ -13,6 +13,7 @@ from classes.FastaExtractor import *
 from classes.BlastParser import *
 from classes.ProgramRunner import *
 from classes.CD_HitParser import *
+from classes.PlacementTree import * 
 
 import Bio.SearchIO
 from Bio import SeqIO
@@ -28,7 +29,7 @@ blast_db =  "/home/hputnam/Clade_Alignments/blast_DB/ITS2_Database_04_23_13.fas"
 logging.basicConfig(format=FORMAT, level=logging.DEBUG)
 
 def runInstance(myInstance):
-   logging.warning(myInstance.dryRun())
+   dryRunInstance(myInstance)
    myInstance.run()
 
 def dryRunInstance(myInstance):
@@ -59,29 +60,48 @@ def processClades(args, pool=Pool(processes=1)):
    # Split fasta file
    # Put all the directories is at the same level as the inFile.
    fastaFilesDir = os.path.join(os.path.dirname(args.inFile.name), "fasta")
-   fastaList = Helpers.splitFileBySample(args.inFile.name, args.samplesFile.name, fastaFilesDir)
    
+   fastaList = Helpers.splitFileBySample(args.inFile.name, args.samplesFile.name, fastaFilesDir)
+
    # Running HMMscan
    hmmerOutputDir =  os.path.join(os.path.dirname(args.inFile.name), "hmmer_output")
    makeDirOrdie(hmmerOutputDir)   
    logging.debug('CLADE: Starting hmmscans for %s files ' % len(fastaList))
-   pool.map(runInstance, [ProgramRunner("HMMER_COMMAND", [ hmmer_db, os.path.join(fastaFilesDir,x), os.path.join(hmmerOutputDir,x.split(".")[0]) ] ) for x in fastaList])
+   # TODO UNCOMMENT THIS
+   #pool.map(runInstance, [ProgramRunner("HMMER_COMMAND", [ hmmer_db, os.path.join(fastaFilesDir,x), os.path.join(hmmerOutputDir,x.split(".")[0]) ] ) for x in fastaList])
    logging.debug('CLADE: Done with hmmscans')
 
    #Parse HMMscan
+
    parsedHmmerOutputDir = os.path.join(os.path.dirname(args.inFile.name), "hmmer_parsedOutput")   
 
-   print "---------"+parsedHmmerOutputDir+"--------"
+
    makeDirOrdie(parsedHmmerOutputDir)
 
    logging.debug('CLADE:Parsing Hmmer outputs for %s files ' % len(fastaList))
 
    # making dirs in hmmer_parsedOutput with the sample names
+   
+
    pool.map(makeDirOrdie, [ os.path.join(parsedHmmerOutputDir, x.split(".")[0]) for x in fastaList])    
 
-   #TODO use os.path.join instead of "+"
+
+   logging.debug('CLADE: Starting parsing for  for %s files ' % len(fastaList))
    samples = [sample.rstrip() for sample  in open(args.samplesFile.name, 'r')]
+   # TODO CHANGE THIS TO RUN ISNTANCE 
+
+   print samples
+   print os.path.join(hmmerOutputDir, samples[0]+".out")
+   print os.path.join(parsedHmmerOutputDir, samples[0])
+   print args.evalue
+   
+   raw_input("press enter to contunue")
+   #for sample in samples:
+   #   cp = CladeParser( os.path.join(hmmerOutputDir, sample+".out"), os.path.join(parsedHmmerOutputDir, sample), args.evalue)
+   #   runInstance(cp)
+
    pool.map(runInstance, [CladeParser( os.path.join(hmmerOutputDir, sample+".out"), os.path.join(parsedHmmerOutputDir, sample), args.evalue) for sample in samples])    
+
    logging.debug('CLADE:Done Parsing Hmmer outputs for %s files ' % len(fastaList))
 
    # generate tables and pie-charts
@@ -190,13 +210,16 @@ def resolveMultipleHits(args, pool):
    logging.debug("resolveMultipleHits: Finished resolving multiple hits")
 
 
-def buildPlacementTree(correctedResultsDir):
+def buildPlacementTree(args, pool):
+   
+
    logging.debug("placermentTree: Building Newick placement Tree for multiple hits") 
-   correctedClades = os.listdir(".")
+   correctedClades = os.listdir(args.correctedResultsDir)
    logging.debug("placermentTree: Clades to be processed are: %s" % " ".join(correctedClades)) 
-   
-   
-   
+   # for each the clades, call the the Newick
+   makeDirOrdie(args.outputDir)
+   pool.map(runInstance, [PlacementTree(cClade, args.correctedResultsDir, os.path.join(args.newickFilesDir, "Clade_%s.nwk" % cClade), args.outputDir) for cClade in correctedClades])   
+   logging.debug("placermentTree: Done with Placement tree processing") 
    
 
 
@@ -253,6 +276,18 @@ def main(argv):
    parser_subtype.set_defaults(func=resolveMultipleHits)
 
 
+   ## BuildPlacermentTree
+   # 
+   parser_subtype = subparsers.add_parser('builPlacementTree')
+   parser_subtype.add_argument('-c', '--correctedResultsDir', required=True, help=" Directory containing corrected Clade placements")
+   parser_subtype.add_argument('-n', '--newickFilesDir', required=True, help="Newick directory with files having format info_clade.nwk")
+   parser_subtype.add_argument('-o', '--outputDir', type=makeDirOrdie, required=True, help="Dir that will contain the newick and interenal nodes information")
+   parser_subtype.set_defaults(func=buildPlacementTree)
+
+
+
+
+
    ## INPUT FILE STATS
    parser_stats = subparsers.add_parser('stats')
    parser_stats.add_argument('-i', '--inFile', type=argparse.FileType('r'), required=True, help=" Input fasta file ")
@@ -276,5 +311,4 @@ if __name__ == "__main__":
    ###  python symTyper.py -t 3 clade  -i data/sampleInput.fasta -s data/samples.ids
    ### python symTyper.py  -t 3 subtype -H data/hmmer_hits/ -s data/samples.ids -b data/blast_output/ -r data/blastResults/ -f data/fasta
    ### python symTyper.py  -t 3 resolveMultipleHits -s data/samples.ids -m data/blastResults/MULTIPLE/fasta/ -c data/resolveMultiples/
-
-
+   ### python symTyper.py  -t 3 builPlacementTree -c data/resolveMultiples/correctedMultiplesHits/corrected -n /home/hputnam/Clade_Trees/ -o data/placementInfo
