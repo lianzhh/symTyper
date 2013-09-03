@@ -1,9 +1,6 @@
 symTyper
 ========
 
-symTyper
-========
-
 I- Description 
 ==========
 Documenation in progress. Please 
