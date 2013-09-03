@@ -32,11 +32,11 @@ optional arguments:
   -t THREADS, --threads THREADS
 
 
-i- Input
+1- Input
 --------
 
 
-ii- Output
+2- Output
 ----------
 
 III- Sample pipeline
