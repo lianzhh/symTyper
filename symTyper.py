@@ -68,7 +68,7 @@ def processClades(args, pool=Pool(processes=1)):
    makeDirOrdie(hmmerOutputDir)   
    logging.debug('CLADE: Starting hmmscans for %s files ' % len(fastaList))
    # TODO UNCOMMENT THIS
-   #pool.map(runInstance, [ProgramRunner("HMMER_COMMAND", [ hmmer_db, os.path.join(fastaFilesDir,x), os.path.join(hmmerOutputDir,x.split(".")[0]) ] ) for x in fastaList])
+   pool.map(runInstance, [ProgramRunner("HMMER_COMMAND", [ hmmer_db, os.path.join(fastaFilesDir,x), os.path.join(hmmerOutputDir,x.split(".")[0]) ] ) for x in fastaList])
    logging.debug('CLADE: Done with hmmscans')
 
    #Parse HMMscan
@@ -180,19 +180,29 @@ def processSubtype(args, pool):
 
 
 def resolveMultipleHits(args, pool):
+   # Cluster each sample independently and then merges all representatives in allReps.fasta
+
    repsDir = "Reps"
-   repsFasta = "allReps.fasta"
-   repsClustersDir= "Clusters"
+   repsFasta = "allReps.fasta" # fasta file for all cluster respresentatives
+   repsClustersDir= "Clusters" # directoy containing output of clustering
    correctedResultsDir = "correctedMultiplesHits"
    logging.debug("resolveMultipleHits: Started process for resolving multiple hits")
+
    samples = [sample.rstrip() for sample in open(args.samplesFile.name, 'r')]
+
    makeDirOrdie(os.path.join(args.clustersDir, "clusters",))
-   pool.map(runInstance, [ProgramRunner("CLUSTER_COMMAND", [os.path.join(args.multipleFastaDir, sample+".fasta"), os.path.join(args.clustersDir, "clusters", sample)])  for sample in samples])
+
+   
+   
+   pool.map(runInstance, [ProgramRunner("CLUSTER_COMMAND", [os.path.join(args.multipleFastaDir, sample+".fasta"), 
+                                                            os.path.join(args.clustersDir, "clusters", sample)])  for sample in samples])
    logging.debug("resolveMultipleHits: Done clustering of multiple reads")
 
    # Directory where all cluster representatives will be set up    
    makeDirOrdie(os.path.join(args.clustersDir, repsDir))
+
    allRepsFasta = open(os.path.join(args.clustersDir, repsDir, repsFasta), 'w')
+
    # WARNING this shoud work fine as long as each clstr file not very large. 
    for sample in samples:
       with open(os.path.join(args.clustersDir, "clusters", sample)) as infile:
@@ -200,10 +210,13 @@ def resolveMultipleHits(args, pool):
    allRepsFasta.close()
    logging.debug("resolveMultipleHits: clustering concatenated all reps")
 
+   #Now Cluster all the representatives
    makeDirOrdie(os.path.join(args.clustersDir, repsDir, repsClustersDir))
    runInstance(ProgramRunner("CLUSTER_COMMAND", [os.path.join(args.clustersDir, repsDir, repsFasta), os.path.join(args.clustersDir, repsDir, repsClustersDir, repsFasta)]))
-   logging.debug("resolveMultipleHits: done clustering concatenated reps")
-   cdHitParser =  CD_HitParser("data/samples.ids", "data/resolveMultiples/Reps/Clusters/allReps.fasta.clstr", "data/resolveMultiples/clusters/", "data/blastResults/MULTIPLE/",)
+   logging.debug("resolveMultipleHits: done clustering the reps %s" % os.path.join(args.clustersDir, repsDir, repsFasta))
+   cdHitParser =  CD_HitParser("data/samples.ids", "data/resolveMultiples/Reps/Clusters/allReps.fasta.clstr", 
+                               "data/resolveMultiples/clusters/", "data/blastResults/MULTIPLE/",)
+   
    makeDirOrdie(os.path.join(args.clustersDir, correctedResultsDir))
    cdHitParser.run(os.path.join(args.clustersDir, correctedResultsDir)) 
 
@@ -220,13 +233,6 @@ def buildPlacementTree(args, pool):
    makeDirOrdie(args.outputDir)
    pool.map(runInstance, [PlacementTree(cClade, args.correctedResultsDir, os.path.join(args.newickFilesDir, "Clade_%s.nwk" % cClade), args.outputDir) for cClade in correctedClades])   
    logging.debug("placermentTree: Done with Placement tree processing") 
-   
-
-
-   
-
-
-
 
 
    
@@ -312,3 +318,6 @@ if __name__ == "__main__":
    ### python symTyper.py  -t 3 subtype -H data/hmmer_hits/ -s data/samples.ids -b data/blast_output/ -r data/blastResults/ -f data/fasta
    ### python symTyper.py  -t 3 resolveMultipleHits -s data/samples.ids -m data/blastResults/MULTIPLE/fasta/ -c data/resolveMultiples/
    ### python symTyper.py  -t 3 builPlacementTree -c data/resolveMultiples/correctedMultiplesHits/corrected -n /home/hputnam/Clade_Trees/ -o data/placementInfo
+
+   ### Build this option eventually to run the complete pipeline
+   ###  python symTyper.py -t 3 symType  -i data/sampleInput.fasta -s data/samples.ids

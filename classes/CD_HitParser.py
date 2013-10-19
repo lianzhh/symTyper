@@ -15,7 +15,8 @@
 
 import os
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
+
 from Helpers import makeDirOrdie
 
 
@@ -43,10 +44,10 @@ class CD_HitParser():
         self.__initRepsDicts__(samplesFile)
 
 
-        # This one is similar to self.reps_clusterSequences, except that it describes the clusters in the first clustering iteration
+        # This one is similar to self.reps_clusterSequences, except that it describes the clusters in the first clustering iteration (the individual samples)
         #{"X1": {"CL_1":\["X1::1503",'X1::1403" ...], "CL_2":\["X1::4", "X1::167"]}}
         self.sample_clustersSeqs ={}
-        # This one is similar to self.reps_sequenceCluster, except that it describes the sequences in the first clustering iteration
+        # This one is similar to self.reps_sequenceCluster, except that it describes the sequences in the first clustering iteration (the individual samples)
         # {"X1" : {"X1::1": "CL_1","X1::23" : "CL_2", ... }, "X2": {"X2:11", "CL_78", ...} ...}
         self.sample_sequenceCluster = {}
 
@@ -151,7 +152,7 @@ class CD_HitParser():
         correctedOutputFile = open(os.path.join( correctedResultsDir, "correctedOutputFile_all_clades"), 'w')
         resolvedOutputFile  = open(os.path.join( correctedResultsDir, "resolvedOutputFile_all_clades" ),  'w')
 
-        # only sequences that occue in a cluster with at least MIN_NUM_SEQS from other clusters pass
+        # only sequences that occur in a cluster with at least MIN_NUM_SEQS from other clusters pass
         passedSeqs = self.__filterSeqs__()
         seqSubtypes= self.__initSeqSubtypes__()
 
@@ -180,14 +181,17 @@ class CD_HitParser():
 
 
             print >> detailedOutputFile, "#### Cluster: %s" % clustId;
-            ####print  passedSeq
+            #### print  passedSeq
             # we resolve all the rep sequences that belong to that cluster from which we selected the passedSeq
+            
+            sampleClust=[]
             for seq in self.reps_clusterSequences[clustId]:
                 # Remove seq from later processing since it was found. 
                 processedSeqs[seq]= clustId+"_"+passedSeq;
                 # which sample does seq belong to?
                 sample = seq.split("::")[0]
                 clust = self.sample_sequenceCluster[sample][seq]
+                sampleClust.append((sample,clust))
                 # Which sequences are with seq in the sample  cluster file?
                 ####print  "\t"+seq
                 for sampleSeq in self.sample_clustersSeqs[sample][clust]:
@@ -207,7 +211,14 @@ class CD_HitParser():
             for (k, v) in  subtypeCounts.items():
                 print >> detailedOutputFile, "%s:\t%s," % (k, v),
             print >> detailedOutputFile
-            print >> detailedOutputFile,  self.reps_clusterSubtypeCounts[clust]
+
+            # breakdown number of squences by sample
+            countBySamples=defaultdict(int)
+            for s,c in sampleClust:
+                countBySamples[s] = countBySamples[s]+len(self.sample_clustersSeqs[s][c])
+
+            print >> detailedOutputFile,  "Breakdown by sample: %s " % dict(countBySamples)
+
 
             #computer the effective range
             effectiveRange = self.__computeEffectiveRange__(counts)
@@ -226,13 +237,15 @@ class CD_HitParser():
             effectiveSubtypes, filtered = self.__getEffectiveSubtypes__(subtypeCounts, effectiveRange[0]) 
             if len(effectiveSubtypes.keys()) == 1:
                 print >> resolvedOutputFile, "Cluster: %s\tnumSeq: %s\tclade: %s\tbreakDown:%s\tsubtypes:%s" % (
-                    clustId, nbSeqs, clade, " ".join(["%s:%s" % (key,val) for (key,val) in self.reps_clusterSubtypeCounts[clust].items() ]), " ".join(["%s:%s" %(x,y) for (x,y) in effectiveSubtypes.items()])
+                    clustId, nbSeqs, clade, " ".join(["%s:%s" % (key,val) for (key,val) in self.reps_clusterSubtypeCounts[clust].items() ]), 
+                    " ".join(["%s:%s" %(x,y) for (x,y) in effectiveSubtypes.items()])
                     ),  
                 if clade not in splitResolvedCladeOutputFiles.keys():
                     # print the line in the appropriate clade file
                     splitResolvedCladeOutputFiles[clade] = open(os.path.join(correctedResultsDir, "resolved", clade), 'w')
                 print >> splitResolvedCladeOutputFiles, "Cluster: %s\tnumSeq: %s\tclade: %s\tbreakDown:%s\tsubtypes:%s" % (
-                    clustId, nbSeqs, clade, " ".join(["%s:%s" % (key,val) for (key,val) in self.reps_clusterSubtypeCounts[clust].items() ]), " ".join(["%s:%s" %(x,y) for (x,y) in effectiveSubtypes.items()])
+                    clustId, nbSeqs, clade, " ".join(["%s:%s" % (key,val) for (key,val) in self.reps_clusterSubtypeCounts[clust].items() ]), 
+                    " ".join(["%s:%s" %(x,y) for (x,y) in effectiveSubtypes.items()])
                     ),  
             else:
 

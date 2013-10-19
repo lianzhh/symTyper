@@ -1,3 +1,4 @@
+
 from Bio import Phylo
 from Helpers import makeDirOrdie
 import re
@@ -47,6 +48,7 @@ class PlacementTree():
             print "** Could not open %s file" % self.correctedCountsFile
         # read in the newick tree 
         try:
+            print "*** opening the newick ref file %s" % self.newickRef
             tree = Phylo.parse(self.newickRef, 'newick').next()
         except IOError:
             print "Could not open newick reference file %s" % self.newickRef
@@ -105,4 +107,5 @@ class PlacementTree():
 
 
     def dryRun(self):
-        return "Running placement tree for clade %s" % self.clade
+        
+        return "Running placement tree for clade %s, the newick ref file is %s" % (self.clade, self.newickRef)
