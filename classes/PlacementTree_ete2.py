@@ -46,6 +46,10 @@ class PlacementTree():
             # Add node name to laef nodes
             N = AttrFace("name", fsize=14, fgcolor="black")
             faces.add_face_to_node(N, node, 0)
+            nstyle = NodeStyle()
+
+            nstyle["size"] = 0
+            node.set_style(nstyle)
         if "internalCount" in node.features:
             print node.name
             # Creates a sphere face whose size is proportional to node's     
@@ -63,7 +67,7 @@ class PlacementTree():
         ts.layout_fn = self.__layout__
         ts.mode = "c"
         ts.show_leaf_name = False
-        tree.render(self.treePNGFile, w=250, tree_style = ts)
+        tree.render(self.treePNGFile, w=100, tree_style = ts)
         tree.render(self.treeSVGFile, w=250, tree_style = ts)
         
 

@@ -13,7 +13,7 @@ from classes.FastaExtractor import *
 from classes.BlastParser import *
 from classes.ProgramRunner import *
 from classes.CD_HitParser import *
-from classes.PlacementTree import * 
+from classes.PlacementTree_ete2 import * 
 
 import Bio.SearchIO
 from Bio import SeqIO
@@ -231,7 +231,15 @@ def buildPlacementTree(args, pool):
    logging.debug("placermentTree: Clades to be processed are: %s" % " ".join(correctedClades)) 
    # for each the clades, call the the Newick
    makeDirOrdie(args.outputDir)
-   pool.map(runInstance, [PlacementTree(cClade, args.correctedResultsDir, os.path.join(args.newickFilesDir, "Clade_%s.nwk" % cClade), args.outputDir) for cClade in correctedClades])   
+
+   # For debugging purposes, call this without the pool
+   cClade = correctedClades[0]
+   pt = PlacementTree(cClade, args.correctedResultsDir, os.path.join(args.newickFilesDir, "Clade_%s.nwk" % cClade), args.outputDir)
+   pt.run()
+
+   # include this in the final code
+   #pool.map(runInstance, [PlacementTree(cClade, args.correctedResultsDir, os.path.join(args.newickFilesDir, "Clade_%s.nwk" % cClade), args.outputDir) for cClade in correctedClades])   
+
    logging.debug("placermentTree: Done with Placement tree processing") 
 
 

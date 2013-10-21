@@ -1,4 +1,4 @@
-
+from ete2 import Tree, TreeStyle, NodeStyle, faces, AttrFace, CircleFace, TextFace
 from Bio import Phylo
 from Helpers import makeDirOrdie
 import re
