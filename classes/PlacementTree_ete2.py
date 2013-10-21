@@ -67,7 +67,7 @@ class PlacementTree():
         ts.layout_fn = self.__layout__
         ts.mode = "c"
         ts.show_leaf_name = False
-        tree.render(self.treePNGFile, w=100, tree_style = ts)
+        tree.render(self.treePNGFile, w=1000, tree_style = ts)
         tree.render(self.treeSVGFile, w=250, tree_style = ts)
         
 
