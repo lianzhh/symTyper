@@ -6,6 +6,13 @@ import os
 
 
 class PlacementTree():
+    #
+    # clade: calde for which a tree will be built
+    # correctedPlacementPerClade: data/resolveMultiples/correctedMultiplesHits/corrected
+    # newickRef: newick tree for clade
+    # outputDir: where the results will be written
+
+
     def __init__(self, clade, correctedPlacementPerClade, newickRef, outputsDir):
         self.correctedCountsFile = os.path.join(correctedPlacementPerClade, clade)
         self.newickRef = newickRef
@@ -15,8 +22,8 @@ class PlacementTree():
         self.cladeDir = os.path.join(outputsDir, self.clade)
         makeDirOrdie(self.cladeDir)
 
+        # otuputs
         self.nodeCladeDistribution = os.path.join(self.cladeDir,"treenodeCladeDist.tsv")
-
         self.newickOutptutFile = os.path.join(self.cladeDir,"placed_clade_%s.nwk" % self.clade)
         self.treePNGFile = os.path.join(self.cladeDir,"placed_clade_%s.png" % self.clade)
         self.treeSVGFile = os.path.join(self.cladeDir,"placed_clade_%s.svg" % self.clade)
@@ -136,7 +143,7 @@ class PlacementTree():
             else:
                 lca.add_features( internalCount = numSeqs)
 
-        
+
             #Update the breakdown by samples, based on the new samples
             if (lca.name in visitedInternalNodes.keys()):
                 for c in counts.keys():
@@ -150,6 +157,7 @@ class PlacementTree():
 
         self.__getDistributionPerInternalNode__(tree, visitedInternalNodes)
         tree.write(features=["count", "name"], format=0, outfile=self.newickOutptutFile)
+        print visitedInternalNodes
 
         self.generateImage(tree)
 

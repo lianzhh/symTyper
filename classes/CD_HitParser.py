@@ -38,9 +38,13 @@ class CD_HitParser():
         # clusterSequences
         self.reps_clusterSequences= {} #{"CL_1": ["X1::29010", "X23::112", ...], "CL_2": ["X3::110", "X11::191", ...]}
         # clusters       
+        # this actually should be called self.reps_clusterSampleCount not subtupeCount
         self.reps_clusterSubtypeCounts= {} ## {"CL_1" : {"X1": 2, "X2": 10, ...}, "CL_2" : {"X1": 3, "X3": 1, ...}, ...}
+        # instead of counting the reps, we count the reps and the sequences they represent at the sample level
+        self.reps_sampleTotalCounts={} 
         # sequences
         self.reps_sequenceCluster= {} ## {"X1::1": "CL_1" , "X2::1": "CL_2", ... }
+
         self.__initRepsDicts__(samplesFile)
 
 
@@ -50,7 +54,7 @@ class CD_HitParser():
         # This one is similar to self.reps_sequenceCluster, except that it describes the sequences in the first clustering iteration (the individual samples)
         # {"X1" : {"X1::1": "CL_1","X1::23" : "CL_2", ... }, "X2": {"X2:11", "CL_78", ...} ...}
         self.sample_sequenceCluster = {}
-
+        
         for sample in self.samples:
             self.__initSamplesDicts__(sample)
 
@@ -108,9 +112,9 @@ class CD_HitParser():
 
 
     def __filterSeqs__(self):
-        """ We chck cluster to which seq belongs
+        """ We check cluster to which seq belongs
         and make sure the cluster has seqs from at least 3 samples
-        if it does, the seqeunces is kept """
+        if it doess, the seqeunces is kept """
         passed = []
         for seq in self.reps_sequenceCluster:
             clusterId = self.reps_sequenceCluster[seq]
@@ -154,12 +158,12 @@ class CD_HitParser():
 
         # only sequences that occur in a cluster with at least MIN_NUM_SEQS from other clusters pass
         passedSeqs = self.__filterSeqs__()
+        print passedSeqs
+
         seqSubtypes= self.__initSeqSubtypes__()
 
         
-        #number of sequences in a cluster of reps + number of sequences in each of samples they represent
-        nbSeqs=0
-        # will keep a list of the sequences that were thus far processed
+        # will keep a list of the sequences that were thu sfar processed
         processedSeqs = {}
         subtypeCounts = {}
 
@@ -174,6 +178,9 @@ class CD_HitParser():
         for passedSeq in passedSeqs:
             # contains the subtupes associated with one cluster of reps (and their representees in the samples)
             subtypes = []
+
+            # number of sequences in a cluster of reps + number of sequences in each of samples they represent
+            nbSeqs=0
 
             if processedSeqs.has_key(passedSeq):
                 continue
@@ -217,9 +224,10 @@ class CD_HitParser():
             for s,c in sampleClust:
                 countBySamples[s] = countBySamples[s]+len(self.sample_clustersSeqs[s][c])
 
+            self.reps_sampleTotalCounts[clustId] = countBySamples
             print >> detailedOutputFile,  "Breakdown by sample: %s " % dict(countBySamples)
 
-
+            
             #computer the effective range
             effectiveRange = self.__computeEffectiveRange__(counts)
             print >> detailedOutputFile, "The effective range is: %s" % " ".join(map(str, effectiveRange))
@@ -235,16 +243,20 @@ class CD_HitParser():
 
 
             effectiveSubtypes, filtered = self.__getEffectiveSubtypes__(subtypeCounts, effectiveRange[0]) 
+
+            # if resolved
             if len(effectiveSubtypes.keys()) == 1:
+
                 print >> resolvedOutputFile, "Cluster: %s\tnumSeq: %s\tclade: %s\tbreakDown:%s\tsubtypes:%s" % (
-                    clustId, nbSeqs, clade, " ".join(["%s:%s" % (key,val) for (key,val) in self.reps_clusterSubtypeCounts[clust].items() ]), 
+                    clustId, nbSeqs, clade, " ".join(["%s:%s" % (key,val) for (key,val) in self.reps_sampleTotalCounts[clustId].items()]), 
                     " ".join(["%s:%s" %(x,y) for (x,y) in effectiveSubtypes.items()])
                     ),  
+
                 if clade not in splitResolvedCladeOutputFiles.keys():
                     # print the line in the appropriate clade file
                     splitResolvedCladeOutputFiles[clade] = open(os.path.join(correctedResultsDir, "resolved", clade), 'w')
                 print >> splitResolvedCladeOutputFiles, "Cluster: %s\tnumSeq: %s\tclade: %s\tbreakDown:%s\tsubtypes:%s" % (
-                    clustId, nbSeqs, clade, " ".join(["%s:%s" % (key,val) for (key,val) in self.reps_clusterSubtypeCounts[clust].items() ]), 
+                    clustId, nbSeqs, clade, " ".join(["%s:%s" % (key,val) for (key,val) in self.reps_sampleTotalCounts[clustId].items()]), 
                     " ".join(["%s:%s" %(x,y) for (x,y) in effectiveSubtypes.items()])
                     ),  
             else:
@@ -257,11 +269,20 @@ class CD_HitParser():
                  
                     print  splitCorrectedCladeOutputFiles
                     print "************************************"
-                print >> splitCorrectedCladeOutputFiles[clade], "Cluster: %s\tnumSeq: %s\tclade: %s\tbreakDown:%s\tsubtypes:" % (
-                    clustId, nbSeqs, clade, " ".join(["%s:%s" % (key,val) for (key,val) in self.reps_clusterSubtypeCounts[clust].items() ])
-                    ),
+                #print >> splitCorrectedCladeOutputFiles[clade], " Cluster: %s\tnumSeq: %s\tclade: %s\tbreakDown:%s\tsubtypes:" % (
+                #    clustId, nbSeqs, clade, " ".join(["%s:%s" % (key,val) for (key,val) in self.reps_clusterSubtypeCounts[clustId].items() ])
+                #    ),            
+                print >> splitCorrectedCladeOutputFiles[clade], " Cluster: %s\tnumSeq: %s\tclade: %s\tbreakDown:%s\tsubtypes:" % (
+                    clustId, nbSeqs, clade, " ".join(["%s:%s" % (key,val) for (key,val) in self.reps_sampleTotalCounts[clustId].items()])
+                    ),            
+
+                
+                
+                #print >> correctedOutputFile, "Cluster: %s\tnumSeq: %s\tclade: %s\tbreakDown:%s\tsubtypes:" % (
+                #    clustId, nbSeqs, clade, " ".join(["%s:%s" % (key,val) for (key,val) in self.reps_clusterSubtypeCounts[clustId].items() ])
+                #    ),
                 print >> correctedOutputFile, "Cluster: %s\tnumSeq: %s\tclade: %s\tbreakDown:%s\tsubtypes:" % (
-                    clustId, nbSeqs, clade, " ".join(["%s:%s" % (key,val) for (key,val) in self.reps_clusterSubtypeCounts[clust].items() ])
+                    clustId, nbSeqs, clade, " ".join(["%s:%s" % (key,val) for (key,val) in self.reps_sampleTotalCounts[clustId].items()])
                     ),
 
                 for (k,v) in effectiveSubtypes.items():
@@ -281,6 +302,6 @@ class CD_HitParser():
         [splitCorrectedCladeOutputFiles[cl].close() for cl in splitCorrectedCladeOutputFiles.keys()]
         [splitResolvedCladeOutputFiles[cl].close() for cl in splitResolvedCladeOutputFiles.keys()]
 
-
+        
     def dryRun(self):
         pass
