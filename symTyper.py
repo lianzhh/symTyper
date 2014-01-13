@@ -48,11 +48,65 @@ def makeDirOrdie(dirPath):
 
 
 
-def computeStats(args):
+def computeStats(args,  pool):
    """ Retrn statistics about the sequences and about the database"""
    print "------"
-   Helpers.fastaStats(args.inFile)
+   # Relevant to dataset 1
+   fastaFileSize = Helpers.fastaFileSize(args.inFile)
+   symbioCounts={} # parsed version of hmmer_parsedOutput/ALL_counts.tsv
+   out_breakdown_lines =  [x.strip().split() for x in open(os.path.join(args.outputs_dir, "hmmer_parsedOutput","ALL_counts.tsv"), 'r').readlines()[1:]]
+   for line in out_breakdown_lines:
+      symbioCounts[line[0]] = line[1:]
+
+   # Relevant to dataset 2
+   totalSymbioHits = sum([int(symbioCounts[x][0]) for x in symbioCounts.keys()])
+   # Relevant to dataset 3
+   totalNonSymbioHits = fastaFileSize - totalSymbioHits
+
+   detailedSymbioCounts={} # parsed version of hmmer_parsedOutput/DETAILED_counts.tsv {"sample_1":{"clade_A":XX, "clade_B":XX, ..} sameple_2:{..} ..}
+   
+
+   out_breakdown_lines =  [x.strip().split() for x in open(os.path.join(args.outputs_dir, "hmmer_parsedOutput","DETAILED_counts.tsv"), 'r').readlines()]
+   clades = out_breakdown_lines[0][1:]
+   # relevant to clade 1
+   cladesCounts = {x:0 for x in clades} # contains the sum for symbioHits per Clade
+
+   for line in out_breakdown_lines[1:]:
+      detailedSymbioCounts[line[0]]={}
+      for i in range(0,len(clades)):
+         detailedSymbioCounts[line[0]][clades[i]] = line[i+1] 
+   for clade in clades:
+      cladesCounts[clade] = sum([int(detailedSymbioCounts[x][clade]) for x in detailedSymbioCounts.keys()])
+   print cladesCounts
+
+   # relevant to subclde 1
+   subcladeBreakdown={}
+   for outputType in ["MULTIPLE", "NEW", "PERFECT", "SHORT", "SHORTNEW", "UNIQUE"]:
+      path = os.path.join(args.outputs_dir,"blastResults", outputType)
+      print path
+      subcladeBreakdown[outputType] = os.popen("cat %s/*.out | wc -l"% path).readline().rstrip()
+   print subcladeBreakdown
    print "------"
+   # relevant to multiple hits 1
+   nbResolved=0
+   path = os.path.join(args.outputs_dir, "resolveMultiples", "correctedMultiplesHits", "resolved")
+   if  os.listdir(path): # if it's not empty
+      print path
+      nbResolved = os.popen("cat %s/* | wc -l" % path).readline().rstrip()
+      raw_input()
+
+   print nbResolved
+   # relevant to multiple hits 2
+   nbInTree=0
+   dirs = os.listdir(os.path.join(args.outputs_dir, "placementInfo"))
+   for myDir in dirs:
+      filePath=os.path.join(args.outputs_dir, "placementInfo",myDir,"treenodeCladeDist.tsv")
+      cladeTot=0
+      for line in open(filePath, 'r').readlines()[1:]:
+         cladeTot += sum([int(x) for x in line.rstrip().split()[1:]])
+      nbInTree += cladeTot
+
+
 
 def processClades(args, pool=Pool(processes=1)):
 
@@ -95,7 +149,6 @@ def processClades(args, pool=Pool(processes=1)):
    print os.path.join(parsedHmmerOutputDir, samples[0])
    print args.evalue
    
-   raw_input("press enter to contunue")
    #for sample in samples:
    #   cp = CladeParser( os.path.join(hmmerOutputDir, sample+".out"), os.path.join(parsedHmmerOutputDir, sample), args.evalue)
    #   runInstance(cp)
@@ -233,12 +286,12 @@ def buildPlacementTree(args, pool):
    makeDirOrdie(args.outputDir)
 
    # For debugging purposes, call this without the pool
-   cClade = correctedClades[0]
-   pt = PlacementTree(cClade, args.correctedResultsDir, os.path.join(args.newickFilesDir, "Clade_%s.nwk" % cClade), args.outputDir)
-   pt.run()
+   #cClade = correctedClades[0]
+   #pt = PlacementTree(cClade, args.correctedResultsDir, os.path.join(args.newickFilesDir, "Clade_%s.nwk" % cClade), args.outputDir)
+   #pt.run()
 
-   # include this in the final code
-   #pool.map(runInstance, [PlacementTree(cClade, args.correctedResultsDir, os.path.join(args.newickFilesDir, "Clade_%s.nwk" % cClade), args.outputDir) for cClade in correctedClades])   
+    #include this in the final code
+   pool.map(runInstance, [PlacementTree(cClade, args.correctedResultsDir, os.path.join(args.newickFilesDir, "Clade_%s.nwk" % cClade), args.outputDir) for cClade in correctedClades])   
 
    logging.debug("placermentTree: Done with Placement tree processing") 
 
@@ -291,7 +344,7 @@ def main(argv):
 
 
    ## BuildPlacermentTree
-   # 
+
    parser_subtype = subparsers.add_parser('builPlacementTree')
    parser_subtype.add_argument('-c', '--correctedResultsDir', required=True, help=" Directory containing corrected Clade placements")
    parser_subtype.add_argument('-n', '--newickFilesDir', required=True, help="Newick directory with files having format info_clade.nwk")
@@ -302,13 +355,20 @@ def main(argv):
 
 
 
-   ## INPUT FILE STATS
+   ## Generate file stats
    parser_stats = subparsers.add_parser('stats')
-   parser_stats.add_argument('-i', '--inFile', type=argparse.FileType('r'), required=True, help=" Input fasta file ")
+   parser_stats.add_argument('-i', '--inFile', required=True, help=" Input fasta file ")
+   parser_stats.add_argument( '--outputs_dir',  required=True, help="Path to the directory contains the output files")
    parser_stats.set_defaults(func=computeStats)
 
-   args = parser.parse_args()
+   ## Generate BIOME file
+   parser_biome = subparsers.add_parser('makeBiome')
+   parser_biome.add_argument( '--outputs_dir',  required=True, help="Path to the directory contains the output files")
+   parser_biome.set_defaults(func=computeStats)
 
+
+   # process input and call appropriate file
+   args = parser.parse_args()
    print "Running with %s threads" % args.threads
    pool = Pool(processes=args.threads)
 
@@ -323,9 +383,9 @@ def main(argv):
 if __name__ == "__main__":
    main(sys.argv)
    ###  python symTyper.py -t 3 clade  -i data/sampleInput.fasta -s data/samples.ids
-   ### python symTyper.py  -t 3 subtype -H data/hmmer_hits/ -s data/samples.ids -b data/blast_output/ -r data/blastResults/ -f data/fasta
-   ### python symTyper.py  -t 3 resolveMultipleHits -s data/samples.ids -m data/blastResults/MULTIPLE/fasta/ -c data/resolveMultiples/
-   ### python symTyper.py  -t 3 builPlacementTree -c data/resolveMultiples/correctedMultiplesHits/corrected -n /home/hputnam/Clade_Trees/ -o data/placementInfo
+   ###  python symTyper.py  -t 3 subtype -H data/hmmer_hits/ -s data/samples.ids -b data/blast_output/ -r data/blastResults/ -f data/fasta
+   ###  python symTyper.py  -t 3 resolveMultipleHits -s data/samples.ids -m data/blastResults/MULTIPLE/fasta/ -c data/resolveMultiples/
+   ###  python symTyper.py  -t 3 builPlacementTree -c data/resolveMultiples/correctedMultiplesHits/corrected -n /home/hputnam/Clade_Trees/ -o data/placementInfo
 
    ### Build this option eventually to run the complete pipeline
    ###  python symTyper.py -t 3 symType  -i data/sampleInput.fasta -s data/samples.ids

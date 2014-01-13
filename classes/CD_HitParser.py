@@ -21,7 +21,7 @@ from Helpers import makeDirOrdie
 
 
 class CD_HitParser():
-    MIN_NUM_SEQS = 3;
+    MIN_NUM_SEQS = 1;
     #samplesNames = samples
     def __init__(self, samplesFile, repsClustersFile, samplesClustDir, multiplesDir):
 
@@ -158,6 +158,7 @@ class CD_HitParser():
 
         # only sequences that occur in a cluster with at least MIN_NUM_SEQS from other clusters pass
         passedSeqs = self.__filterSeqs__()
+
         print passedSeqs
 
         seqSubtypes= self.__initSeqSubtypes__()
