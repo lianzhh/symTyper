@@ -47,12 +47,15 @@ def makeDirOrdie(dirPath):
    return dirPath 
 
 
-
 def computeStats(args,  pool):
    """ Retrn statistics about the sequences and about the database"""
    print "------"
+   outFile = open(args.out_file,'w')
+   outputs={}
    # Relevant to dataset 1
    fastaFileSize = Helpers.fastaFileSize(args.inFile)
+   outputs['fastaFileSize'] = fastaFileSize
+
    symbioCounts={} # parsed version of hmmer_parsedOutput/ALL_counts.tsv
    out_breakdown_lines =  [x.strip().split() for x in open(os.path.join(args.outputs_dir, "hmmer_parsedOutput","ALL_counts.tsv"), 'r').readlines()[1:]]
    for line in out_breakdown_lines:
@@ -60,8 +63,11 @@ def computeStats(args,  pool):
 
    # Relevant to dataset 2
    totalSymbioHits = sum([int(symbioCounts[x][0]) for x in symbioCounts.keys()])
+   outputs['totalSymbioHits'] = totalSymbioHits
+
    # Relevant to dataset 3
    totalNonSymbioHits = fastaFileSize - totalSymbioHits
+   outputs['totalNonSymbioHits'] = totalNonSymbioHits
 
    detailedSymbioCounts={} # parsed version of hmmer_parsedOutput/DETAILED_counts.tsv {"sample_1":{"clade_A":XX, "clade_B":XX, ..} sameple_2:{..} ..}
    
@@ -79,6 +85,9 @@ def computeStats(args,  pool):
       cladesCounts[clade] = sum([int(detailedSymbioCounts[x][clade]) for x in detailedSymbioCounts.keys()])
    print cladesCounts
 
+   outputs['cladesCounts'] = cladesCounts
+
+
    # relevant to subclde 1
    subcladeBreakdown={}
    for outputType in ["MULTIPLE", "NEW", "PERFECT", "SHORT", "SHORTNEW", "UNIQUE"]:
@@ -86,6 +95,8 @@ def computeStats(args,  pool):
       print path
       subcladeBreakdown[outputType] = os.popen("cat %s/*.out | wc -l"% path).readline().rstrip()
    print subcladeBreakdown
+   outputs['subcladeBreakdown'] = subcladeBreakdown
+
    print "------"
    # relevant to multiple hits 1
    nbResolved=0
@@ -96,6 +107,9 @@ def computeStats(args,  pool):
       raw_input()
 
    print nbResolved
+   outputs['nbResolved'] = nbResolved
+
+
    # relevant to multiple hits 2
    nbInTree=0
    dirs = os.listdir(os.path.join(args.outputs_dir, "placementInfo"))
@@ -105,8 +119,9 @@ def computeStats(args,  pool):
       for line in open(filePath, 'r').readlines()[1:]:
          cladeTot += sum([int(x) for x in line.rstrip().split()[1:]])
       nbInTree += cladeTot
-
-
+   outputs['nbInTree'] = nbInTree
+   
+   print outputs
 
 def processClades(args, pool=Pool(processes=1)):
 
@@ -290,15 +305,66 @@ def buildPlacementTree(args, pool):
    #pt = PlacementTree(cClade, args.correctedResultsDir, os.path.join(args.newickFilesDir, "Clade_%s.nwk" % cClade), args.outputDir)
    #pt.run()
 
-    #include this in the final code
+   #include this in the final code
    pool.map(runInstance, [PlacementTree(cClade, args.correctedResultsDir, os.path.join(args.newickFilesDir, "Clade_%s.nwk" % cClade), args.outputDir) for cClade in correctedClades])   
 
    logging.debug("placermentTree: Done with Placement tree processing") 
 
 
-   
+def makeBiome(args, pool):  
+      logging.debug("Making the biome file")
+      logging.debug("Consolidating the subtypes files: PERFECT, SHORTNEW, UNIQUE")
+      samplesBreakDown={}
+      headerSet = set() # will contain all the values seen throughout the program
+      for myFile in ["PERFECT_subtypes_count.tsv", "SHORTNEW_subtypes_count.tsv", "UNIQUE_subtypes_count.tsv"]:
+         print myFile
+         subTypeFile = open(os.path.join(args.outputs_dir, 'blastResults', myFile))
+         header = subTypeFile.readline().split()
+         headerSet = headerSet.union(header[1:])
+         if len(header) > 1:  # if I have at least one header
+            for line in subTypeFile:
+               data = line.split()
+               if not samplesBreakDown.has_key(data[0]):
+                  samplesBreakDown[data[0]] ={}
+               for itemPos in range(1, len(header)):
+                  #print data[0], "\t", header[itemPos], "\t", data[itemPos]
+                  #raw_input()
+                  if samplesBreakDown[data[0]].has_key(header[itemPos]):
+                     samplesBreakDown[data[0]][header[itemPos]] += int(data[itemPos])
+                  else:
+                     samplesBreakDown[data[0]][header[itemPos]] = int(data[itemPos])
+      logging.debug("Adding the internal nodes information")
+      for myDir in os.listdir(os.path.join(args.outputs_dir, 'placementInfo')):
+         internalNodesFile = open(os.path.join(args.outputs_dir, 'placementInfo', myDir, 'treenodeCladeDist.tsv'))
+      
+         header = internalNodesFile.readline().split()
+         headerSet = headerSet.union(header[1:])
+         if len(header) > 1:  # if I have at least one header
+            for line in internalNodesFile:
+               data = line.split()
+               if not samplesBreakDown.has_key(data[0]):
+                  samplesBreakDown[data[0]] ={}
+               for itemPos in range(1, len(header)):
+                  #print data[0], "\t", header[itemPos], "\t", data[itemPos]
+                  #raw_input()
+                  # no need to check if the node is going to be in the file as we know it is going to be UNIQUE
+                  samplesBreakDown[data[0]][header[itemPos]] = int(data[itemPos])
+      internalNodesFile.close()
 
+      biomeFile = open(os.path.join(args.outputs_dir, 'breakdown.biome'), "w")
+      logging.debug("Writing to the Biome file")
+      print >> biomeFile, "sample\t",
+      print >> biomeFile, "\t".join(["%s" % (x) for x in sorted(headerSet)])
+      for sample in samplesBreakDown.keys():
+            print  >> biomeFile, sample,
+            for header in headerSet:
+                print >> biomeFile, "\t",
+                print >> biomeFile, samplesBreakDown[sample][header] if header in samplesBreakDown[sample].keys() else 0,
+            print >> biomeFile
+      biomeFile.close()
+      logging.debug("Done Writing the biome file")
 
+                     
 
 
 def main(argv):
@@ -352,19 +418,17 @@ def main(argv):
    parser_subtype.set_defaults(func=buildPlacementTree)
 
 
-
-
-
    ## Generate file stats
    parser_stats = subparsers.add_parser('stats')
    parser_stats.add_argument('-i', '--inFile', required=True, help=" Input fasta file ")
    parser_stats.add_argument( '--outputs_dir',  required=True, help="Path to the directory contains the output files")
+   parser_stats.add_argument( '--out_file',  required=True, help="Output stats files where results will be printed")
    parser_stats.set_defaults(func=computeStats)
 
    ## Generate BIOME file
    parser_biome = subparsers.add_parser('makeBiome')
    parser_biome.add_argument( '--outputs_dir',  required=True, help="Path to the directory contains the output files")
-   parser_biome.set_defaults(func=computeStats)
+   parser_biome.set_defaults(func=makeBiome)
 
 
    # process input and call appropriate file

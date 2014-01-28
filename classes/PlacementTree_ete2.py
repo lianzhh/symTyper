@@ -36,28 +36,28 @@ class PlacementTree():
         samples = set([i for x in visitedInternalNodes.values() for i in x])
 
         nodes = visitedInternalNodes.keys()
-        print >> nodeCladesOutFile, "\t",
-        print >> nodeCladesOutFile, "\t".join(["%s"%x for x in nodes])
+        print >> nodeCladesOutFile, "sample\t",
+        print >> nodeCladesOutFile, "\t".join(["%s_%s" % (self.clade, x) for x in nodes])
         for sample in samples:
             print  >> nodeCladesOutFile, sample,
             for node in  visitedInternalNodes.keys():
                 print >> nodeCladesOutFile, "\t",
                 print >> nodeCladesOutFile, visitedInternalNodes[node][sample] if sample in visitedInternalNodes[node].keys() else 0,
-            print >> nodeCladesOutFile, "\n";
-        #nodeCladesOutFile.close()
+            print >> nodeCladesOutFile
+        nodeCladesOutFile.close()
 
         # get all the samples that were used 
-        print >> nodeCladesOutFile, "\n"
-        samples = set([i for x in visitedInternalNodes.values() for i in x])
-        print >> nodeCladesOutFile, "\t",
-        print >> nodeCladesOutFile, "\t".join(["%s"%x for x in samples])
-        for node in  visitedInternalNodes.keys():
-            print  >> nodeCladesOutFile, node,
-            for sample in samples:
-                print >> nodeCladesOutFile, "\t",
-                print >> nodeCladesOutFile, visitedInternalNodes[node][sample] if sample in visitedInternalNodes[node].keys() else 0,
-            print >> nodeCladesOutFile, "\n";
-        nodeCladesOutFile.close()
+        # print >> nodeCladesOutFile, "\n"
+        # samples = set([i for x in visitedInternalNodes.values() for i in x])
+        # print >> nodeCladesOutFile, "\t",
+        # print >> nodeCladesOutFile, "\t".join(["%s"%x for x in samples])
+        # for node in  visitedInternalNodes.keys():
+        #     print  >> nodeCladesOutFile, node,
+        #     for sample in samples:
+        #         print >> nodeCladesOutFile, "\t",
+        #         print >> nodeCladesOutFile, visitedInternalNodes[node][sample] if sample in visitedInternalNodes[node].keys() else 0,
+        #     print >> nodeCladesOutFile, "\n";
+        # nodeCladesOutFile.close()
 
 
     # layout required by generateImage
